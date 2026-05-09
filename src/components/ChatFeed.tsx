@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import { Cpu, Zap } from 'lucide-react';
+import { Logo } from './Logo';
 import { motion } from 'motion/react';
 import Markdown from 'react-markdown';
 import { CodeBlock } from './CodeBlock';
@@ -32,8 +33,8 @@ export const ChatFeed = memo(({ messages, isLoading }: ChatFeedProps) => {
     >
       {messages.length === 0 && (
         <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none">
-          <div className="w-20 h-20 rounded-2xl bg-purple-600/10 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.2)] overflow-hidden mb-6 flex items-center justify-center">
-            <img src="/file_00000000129871fb94548eab962afb1b.png" alt="Fluxion Logo" className="w-full h-full object-cover grayscale brightness-50" referrerPolicy="no-referrer" />
+          <div className="mb-6 flex items-center justify-center">
+            <Logo size={80} className="grayscale brightness-50" />
           </div>
           <div className="text-center">
             <p className="text-[12px] font-mono tracking-[0.3em] uppercase text-zinc-400">Waiting for terminal input</p>
@@ -65,13 +66,13 @@ export const ChatFeed = memo(({ messages, isLoading }: ChatFeedProps) => {
               msg.role === 'user' ? "flex-row-reverse" : "flex-row"
             )}>
               <div className={cn(
-                "w-6 h-6 rounded-lg flex items-center justify-center border overflow-hidden",
+                "w-7 h-7 rounded-lg flex items-center justify-center border overflow-hidden shrink-0",
                 msg.role === 'user' ? "bg-zinc-800 border-zinc-700" : "bg-purple-600/10 border-purple-500/20"
               )}>
                 {msg.role === 'user' ? (
-                  <Zap size={12} className="text-zinc-400" />
+                  <Zap size={14} className="text-zinc-400" />
                 ) : (
-                  <img src="/file_00000000129871fb94548eab962afb1b.png" alt="AI" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <Logo size={28} className="rounded-lg border-none shadow-none bg-transparent" />
                 )}
               </div>
               <span className="text-[10px] font-mono uppercase tracking-[0.2em] font-bold text-zinc-500">

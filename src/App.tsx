@@ -23,6 +23,7 @@ import {
   Github
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Logo } from './components/Logo';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { nanoid } from 'nanoid';
@@ -1871,8 +1872,8 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
           className="relative z-10"
         >
           <div className="absolute inset-0 bg-purple-500 blur-[60px] opacity-20" />
-          <div className="w-20 h-20 rounded-2xl bg-purple-600/10 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.2)] overflow-hidden mb-6 mx-auto flex items-center justify-center">
-            <img src="/file_00000000129871fb94548eab962afb1b.png" alt="Fluxion Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="mb-6 mx-auto flex items-center justify-center">
+            <Logo size={80} />
           </div>
           <p className="text-[12px] font-mono tracking-[0.5em] text-zinc-500 uppercase">INICIALIZANDO FLUXION...</p>
         </motion.div>
@@ -2012,8 +2013,8 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
       )}>
         <div className="p-5 flex flex-col gap-5 flex-1 overflow-hidden">
           <div className="flex items-center gap-2.5 px-1">
-            <div className="w-9 h-9 rounded-lg bg-purple-600/10 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.2)] overflow-hidden flex items-center justify-center">
-              <img src="/file_00000000129871fb94548eab962afb1b.png" alt="Fluxion Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <div className="flex items-center justify-center">
+              <Logo size={36} />
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight text-white/90">FLUXION</h1>
@@ -2220,8 +2221,8 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
                     className="relative mb-6 inline-block"
                   >
                     <div className="absolute inset-0 bg-purple-500 blur-[40px] opacity-20 rounded-full" />
-                    <div className="relative p-4 rounded-2xl bg-zinc-900 border border-purple-500/20 shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-                      <img src="/file_00000000129871fb94548eab962afb1b.png" alt="Fluxion Logo" className="w-12 h-12 object-cover" />
+                    <div className="relative">
+                      <Logo size={64} />
                     </div>
                   </motion.div>
                   <h1 className="text-3xl font-black tracking-tight text-white mb-2 italic">FLUXION</h1>
