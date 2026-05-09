@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -14,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin
-const configPath = path.join(__dirname, "firebase-applet-config.json");
+const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
 const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
 
 const projectId = firebaseConfig.projectId;
@@ -109,6 +108,16 @@ async function startServer() {
 
       // 1. Google Gemini
       if (model.includes("gemini")) {
+        // Internal mapping for custom Fluxion IDs to standard Google models
+        const modelMap: { [key: string]: string } = {
+          'gemini-3.1-pro-preview': 'gemini-1.5-pro',
+          'gemini-3-flash-preview': 'gemini-1.5-flash',
+          'gemini-3.1-flash-lite': 'gemini-1.5-flash-lite',
+          'gemini-pro': 'gemini-1.5-pro',
+          'gemini-flash': 'gemini-1.5-flash'
+        };
+        const actualModel = modelMap[model] || model;
+
         const geminiKeys = [
           process.env.GEMINI_API_KEY_1,
           process.env.GEMINI_API_KEY_2,
@@ -132,7 +141,7 @@ async function startServer() {
           try {
             const serverGenAI = new GoogleGenerativeAI(geminiKey);
             const genModel = serverGenAI.getGenerativeModel({ 
-              model: model,
+              model: actualModel,
               systemInstruction: systemInstruction 
             });
 
@@ -372,8 +381,9 @@ async function startServer() {
   // Vite middleware for development
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode`);
   
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     console.log("Initializing Vite middleware...");
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -382,15 +392,25 @@ async function startServer() {
     console.log("Vite middleware initialized.");
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    } else {
+      console.warn("Dist path not found, API only mode active.");
+    }
+  }
+
+  // Only listen in non-serverless environments
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+export const app = startServer();
+export default app;

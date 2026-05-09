@@ -10,6 +10,9 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@google-cloud/firestore": "^8.5.0",
     "@google/genai": "^1.29.0",
