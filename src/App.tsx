@@ -61,6 +61,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Message, Chat, Model, UserProfile } from './types';
 import { ChatFeed } from './components/ChatFeed';
 import { ChatInput } from './components/ChatInput';
+import { VerificationCountdown } from './components/VerificationCountdown';
 
 interface AppConfig {
   primaryColor: string;
@@ -1076,7 +1077,7 @@ Seu objetivo é gerar sistemas Roblox únicos, modernos, inteligentes e memoráv
 
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<{ credits: number, lastResetDate: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1108,6 +1109,28 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isLinkSent, setIsLinkSent] = useState(false); // Used for forgot password too
+  const [regCooldown, setRegCooldown] = useState<string | null>(null);
+
+  useEffect(() => {
+    const check = () => {
+      const lastReg = localStorage.getItem('fluxion_last_reg');
+      if (lastReg) {
+        const diff = Date.now() - parseInt(lastReg);
+        const hours24 = 24 * 60 * 60 * 1000;
+        if (diff < hours24) {
+          const remaining = hours24 - diff;
+          const h = Math.floor(remaining / 3600000);
+          const m = Math.floor((remaining % 3600000) / 60000);
+          setRegCooldown(`Proteção Anti-Abuso: Aguarde ${h}h ${m}m para registrar uma nova conta neste dispositivo.`);
+        } else {
+          setRegCooldown(null);
+        }
+      }
+    };
+    check();
+    const timer = setInterval(check, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const ADMIN_EMAIL = "wesley04012011w@gmail.com";
 
@@ -1295,6 +1318,19 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
     return () => unsubscribe();
   }, []);
 
+  // PWA Service Worker Registration
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('SW registered: ', registration);
+        }).catch(registrationError => {
+          console.log('SW registration failed: ', registrationError);
+        });
+      });
+    }
+  }, []);
+
   // Credit system logic
   useEffect(() => {
     if (!user) return;
@@ -1304,11 +1340,15 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
 
     const unsubscribe = onSnapshot(userRef, (snap) => {
       if (!snap.exists()) {
-        setDoc(userRef, { credits: 30, lastResetDate: today }).catch(err => 
+        setDoc(userRef, { 
+          credits: 30, 
+          lastResetDate: today,
+          createdAt: serverTimestamp() 
+        }).catch(err => 
           handleFirestoreError(err, OperationType.CREATE, `users/${user.uid}`)
         );
       } else {
-        const data = snap.data() as { credits: number, lastResetDate: string };
+        const data = snap.data() as UserProfile;
         if (data.lastResetDate !== today) {
           updateDoc(userRef, { credits: 30, lastResetDate: today }).catch(err => 
             handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`)
@@ -1576,12 +1616,18 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
         }
         await signInWithEmailAndPassword(auth, email, password);
       } else if (authMode === 'register') {
+        if (regCooldown) {
+          setAuthError(regCooldown);
+          setIsAuthLoading(false);
+          return;
+        }
         if (!password) {
           setAuthError("Senha é obrigatória.");
           setIsAuthLoading(false);
           return;
         }
         await createUserWithEmailAndPassword(auth, email, password);
+        localStorage.setItem('fluxion_last_reg', Date.now().toString());
       } else if (authMode === 'forgot') {
         await sendPasswordResetEmail(auth, email);
         setIsLinkSent(true);
@@ -1604,7 +1650,13 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
     setAuthError(null);
     setIsAuthLoading(true);
     try {
+      if (regCooldown) {
+        setAuthError(regCooldown);
+        setIsAuthLoading(false); // Make sure to reset loading
+        return;
+      }
       await signInWithPopup(auth, githubProvider);
+      localStorage.setItem('fluxion_last_reg', Date.now().toString());
     } catch (error: any) {
       console.error("Github Auth Error:", error);
       if (error.code === 'auth/popup-blocked') {
@@ -2234,9 +2286,9 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
                   
                   {!isLinkSent ? (
                     <form onSubmit={handleEmailAuth} className="space-y-4">
-                      {authError && (
+                      {(authError || (authMode === 'register' && regCooldown)) && (
                         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold text-center uppercase tracking-widest">
-                          {authError}
+                          {authError || regCooldown}
                         </div>
                       )}
                       
@@ -2268,7 +2320,7 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
 
                       <button 
                         type="submit"
-                        disabled={isAuthLoading}
+                        disabled={isAuthLoading || (authMode === 'register' && !!regCooldown)}
                         className="w-full py-4 bg-white text-black font-black rounded-xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 text-xs tracking-widest"
                       >
                         {isAuthLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : (
@@ -2299,7 +2351,7 @@ OBJETIVO FINAL: Entregar uma GUI que não apenas funcione perfeitamente, mas que
                       <button 
                         type="button"
                         onClick={handleGithubAuth}
-                        disabled={isAuthLoading}
+                        disabled={isAuthLoading || !!regCooldown}
                         className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50 text-[11px] uppercase tracking-widest border border-white/5"
                       >
                         <Github size={16} />

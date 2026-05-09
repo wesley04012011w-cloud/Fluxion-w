@@ -27,4 +27,5 @@ export interface UserProfile {
   credits: number;
   lastResetDate: string;
   isAdmin?: boolean;
+  createdAt?: any;
 }
