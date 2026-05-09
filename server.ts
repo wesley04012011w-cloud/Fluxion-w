@@ -35,11 +35,24 @@ const fdb = getFirestore(firebaseApp, databaseId);
 (async () => {
   try {
     console.log(`Verifying Firestore: ${projectId}/${databaseId}...`);
-    // Try a simple operation
     await fdb.collection("_health").limit(1).get();
     console.log("Firestore connection verified.");
   } catch (err: any) {
     console.error("Firestore initialization warning:", err.message);
+  }
+
+  // Check for critical environment variables
+  const hasGemini = !!(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1);
+  const hasOpenRouter = !!(process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY_1);
+  const hasDeepseek = !!(process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY_1);
+  
+  console.log("AI Providers Status:");
+  console.log(`- Gemini: ${hasGemini ? "CONFIGURED" : "MISSING"}`);
+  console.log(`- OpenRouter: ${hasOpenRouter ? "CONFIGURED" : "MISSING"}`);
+  console.log(`- DeepSeek: ${hasDeepseek ? "CONFIGURED" : "MISSING"}`);
+  
+  if (!hasGemini) {
+    console.warn("CRITICAL: GEMINI_API_KEY is missing. Gemini models will not work outside the preview environment until configured in Settings.");
   }
 })();
 
@@ -103,7 +116,7 @@ async function startServer() {
           process.env.GEMINI_API_KEY_4,
           process.env.GEMINI_API_KEY_5,
           process.env.GEMINI_API_KEY,
-        ].filter(k => k && k.length > 10);
+        ].filter(k => k && k.length > 5);
 
         if (geminiKeys.length === 0) {
           return res.status(500).json({ 
@@ -142,35 +155,18 @@ async function startServer() {
           } catch (err: any) {
             lastGeminiError = err;
             const errMsg = err.message || "";
-            console.error(`[Gemini Key Error] Rotating key due to: ${errMsg}`);
+            console.error(`[Gemini Error] ${model}: ${errMsg}`);
             
-            // If it's a 404 (Model not found), it might be an invalid model ID or project restriction
-            if (errMsg.includes("404") || errMsg.includes("not found")) {
-               console.error(`[Gemini] Model ${model} not found for this key.`);
-            }
-
-            // Retry on invalid key, quota (429), or generic request error (400)
-            if (errMsg.includes("API key not valid") || errMsg.includes("429") || errMsg.includes("400") || errMsg.includes("503")) {
+            if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("500") || errMsg.includes("400")) {
               continue;
             }
             break;
           }
         }
 
-        let details = lastGeminiError?.message || "Erro desconhecido";
-        if (details.includes("429")) {
-          details = "Limite de cota excedido em todas as suas chaves Gemini (429). Tente o modelo 'Pulse' (Flash Lite) ou aguarde alguns minutos.";
-        } else if (details.includes("503")) {
-          details = "O modelo selecionado está com demanda altíssima no Google (503). Tente o modelo 'Pulse' ou 'Warp' que costumam estar mais disponíveis.";
-        } else if (details.includes("API key not valid")) {
-          details = "Todas as chaves Gemini fornecidas são inválidas. Verifique se as copiou corretamente (sem espaços).";
-        } else if (details.includes("404")) {
-          details = `O modelo '${model}' não foi encontrado ou não está liberado para o seu nível de acesso na API da Google.`;
-        }
-
         return res.status(lastGeminiError?.status || 500).json({
-          error: "Falha Crítica no Gemini",
-          details: details,
+          error: "Erro no Gemini",
+          details: lastGeminiError?.message || "Falha ao processar resposta da IA"
         });
       }
 
@@ -366,6 +362,11 @@ async function startServer() {
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
+  });
+
+  // API 404 handler
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
   });
 
   // Vite middleware for development
