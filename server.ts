@@ -106,18 +106,74 @@ async function startServer() {
         return res.status(400).json({ error: "Missing required parameters (model or messages)." });
       }
 
-      // 1. Google Gemini
-      if (model.includes("gemini")) {
-        // Internal mapping for custom Fluxion IDs to standard Google models
-        const modelMap: { [key: string]: string } = {
-          'gemini-3.1-pro-preview': 'gemini-1.5-pro',
-          'gemini-3-flash-preview': 'gemini-1.5-flash',
-          'gemini-3.1-flash-lite': 'gemini-1.5-flash-lite',
-          'gemini-pro': 'gemini-1.5-pro',
-          'gemini-flash': 'gemini-1.5-flash'
-        };
-        const actualModel = modelMap[model] || model;
+      // 1. OpenRouter (Check this first to avoid collisions with providers)
+      if (model.startsWith("openrouter:")) {
+        const orKeys = [
+          process.env.OPENROUTER_API_KEY_1,
+          process.env.OPENROUTER_API_KEY_2,
+          process.env.OPENROUTER_API_KEY_3,
+          process.env.OPENROUTER_API_KEY_4,
+          process.env.OPENROUTER_API_KEY_5,
+          process.env.OPENROUTER_API_KEY,
+        ].filter(k => k && k.length > 5);
 
+        if (orKeys.length === 0) {
+          return res.status(500).json({ 
+            error: "OPENROUTER_API_KEY não configurada.",
+            details: "Configure as chaves OPENROUTER_API_KEY_1 até 5 nas configurações do projeto."
+          });
+        }
+
+        const actualModel = model.replace("openrouter:", "");
+        let lastOrError: any = null;
+        const shuffledOrKeys = [...orKeys].sort(() => Math.random() - 0.5);
+
+        for (const orKey of shuffledOrKeys) {
+          try {
+            const openrouter = new OpenAI({
+              apiKey: orKey,
+              baseURL: "https://openrouter.ai/api/v1",
+              defaultHeaders: {
+                "HTTP-Referer": "https://ais.studio",
+                "X-Title": "Fluxion AI",
+              }
+            });
+
+            const response = await openrouter.chat.completions.create({
+              model: actualModel,
+              messages: [
+                ...(systemInstruction ? [{ role: "system", content: systemInstruction }] : []),
+                ...messages
+              ],
+              temperature: temperature ?? 0.7,
+              max_tokens: max_tokens ?? 4096,
+            });
+
+            return res.json({ text: response.choices[0].message.content });
+          } catch (err: any) {
+            lastOrError = err;
+            console.error(`[OpenRouter Key Error] Rotating key due to: ${err.message}`);
+            
+            if (err.status === 401 || err.status === 402 || err.status === 429 || err.status === 503) {
+              continue;
+            }
+            break;
+          }
+        }
+
+        let details = lastOrError?.message || "Erro desconhecido no OpenRouter";
+        if (lastOrError?.status === 402) details = "Saldo insuficiente no OpenRouter em todas as chaves (402).";
+        if (lastOrError?.status === 429) details = "Limite de taxa atingido no OpenRouter (429). Aguarde um instante.";
+        if (lastOrError?.status === 401) details = "Chaves do OpenRouter inválidas ou expiradas.";
+
+        return res.status(lastOrError?.status || 500).json({
+          error: "Falha Geral no OpenRouter",
+          details: details
+        });
+      }
+
+      // 2. Google Gemini
+      if (model.includes("gemini")) {
         const geminiKeys = [
           process.env.GEMINI_API_KEY_1,
           process.env.GEMINI_API_KEY_2,
@@ -141,7 +197,7 @@ async function startServer() {
           try {
             const serverGenAI = new GoogleGenerativeAI(geminiKey);
             const genModel = serverGenAI.getGenerativeModel({ 
-              model: actualModel,
+              model: model,
               systemInstruction: systemInstruction 
             });
 
@@ -179,7 +235,7 @@ async function startServer() {
         });
       }
 
-      // 2. Native DeepSeek
+      // 3. Native DeepSeek
       if (model.startsWith("deepseek:") || (model.includes("deepseek") && !model.includes("/"))) {
         const keys = [
           process.env.DEEPSEEK_API_KEY_1,
@@ -248,7 +304,7 @@ async function startServer() {
         });
       }
 
-      // 3. Groq
+      // 4. Groq
       if (model.startsWith("groq:")) {
         const apiKey = process.env.GROQ_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "GROQ_API_KEY não configurada." });
@@ -271,7 +327,7 @@ async function startServer() {
         return res.json({ text: response.choices[0].message.content });
       }
 
-      // 4. OpenAI
+      // 5. OpenAI
       if (model.startsWith("openai:") || model.startsWith("gpt-")) {
         const apiKey = process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY; // Handle both variants
         if (!apiKey) return res.status(500).json({ error: "OPENAI_API_KEY não configurada." });
@@ -291,72 +347,6 @@ async function startServer() {
         return res.json({ text: response.choices[0].message.content });
       }
 
-      // 5. OpenRouter
-      if (model.startsWith("openrouter:")) {
-        const orKeys = [
-          process.env.OPENROUTER_API_KEY_1,
-          process.env.OPENROUTER_API_KEY_2,
-          process.env.OPENROUTER_API_KEY_3,
-          process.env.OPENROUTER_API_KEY_4,
-          process.env.OPENROUTER_API_KEY_5,
-          process.env.OPENROUTER_API_KEY,
-        ].filter(k => k && k.length > 10);
-
-        if (orKeys.length === 0) {
-          return res.status(500).json({ 
-            error: "OPENROUTER_API_KEY não configurada.",
-            details: "Configure as chaves OPENROUTER_API_KEY_1 até 5 nas configurações do projeto."
-          });
-        }
-
-        const actualModel = model.replace("openrouter:", "");
-        let lastOrError: any = null;
-        const shuffledOrKeys = [...orKeys].sort(() => Math.random() - 0.5);
-
-        for (const orKey of shuffledOrKeys) {
-          try {
-            const openrouter = new OpenAI({
-              apiKey: orKey,
-              baseURL: "https://openrouter.ai/api/v1",
-              defaultHeaders: {
-                "HTTP-Referer": "https://ais.studio",
-                "X-Title": "Fluxion AI",
-              }
-            });
-
-            const response = await openrouter.chat.completions.create({
-              model: actualModel,
-              messages: [
-                ...(systemInstruction ? [{ role: "system", content: systemInstruction }] : []),
-                ...messages
-              ],
-              temperature: temperature ?? 0.7,
-              max_tokens: max_tokens ?? 4096,
-            });
-
-            return res.json({ text: response.choices[0].message.content });
-          } catch (err: any) {
-            lastOrError = err;
-            console.error(`[OpenRouter Key Error] Rotating key due to: ${err.message}`);
-            
-            // Common errors to rotate on: 401 (Auth), 402 (Payment), 429 (Rate Limit), 503 (Overloaded)
-            if (err.status === 401 || err.status === 402 || err.status === 429 || err.status === 503) {
-              continue;
-            }
-            break;
-          }
-        }
-
-        let details = lastOrError?.message || "Erro desconhecido no OpenRouter";
-        if (lastOrError?.status === 402) details = "Saldo insuficiente no OpenRouter em todas as chaves (402).";
-        if (lastOrError?.status === 429) details = "Limite de taxa atingido no OpenRouter (429). Aguarde um instante.";
-        if (lastOrError?.status === 401) details = "Chaves do OpenRouter inválidas ou expiradas.";
-
-        return res.status(lastOrError?.status || 500).json({
-          error: "Falha Geral no OpenRouter",
-          details: details
-        });
-      }
 
       // 6. Fallback: Catch-all error for unhandled models
       return res.status(400).json({ 
