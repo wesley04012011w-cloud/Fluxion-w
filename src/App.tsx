@@ -61,7 +61,6 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Message, Chat, Model, UserProfile } from './types';
 import { ChatFeed } from './components/ChatFeed';
 import { ChatInput } from './components/ChatInput';
-import { VerificationCountdown } from './components/VerificationCountdown';
 
 interface AppConfig {
   primaryColor: string;
