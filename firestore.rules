@@ -1,0 +1,149 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validation Blueprints ---
+
+    function isValidChat(data) {
+      return data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 500 &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time &&
+             data.keys().hasAll(['title', 'userId', 'createdAt', 'updatedAt']) &&
+             data.keys().size() == 4;
+    }
+
+    function isValidMessage(data) {
+      return data.userId == request.auth.uid &&
+             data.role in ['user', 'assistant'] &&
+             data.content is string && data.content.size() <= 1000000 &&
+             data.createdAt == request.time &&
+             data.keys().hasAll(['role', 'content', 'userId', 'createdAt']) &&
+             (data.keys().size() == 4 || (data.keys().size() == 5 && data.images is list));
+    }
+
+    function isValidUser(data) {
+      return data.credits is int && data.credits >= 0 && data.credits <= 10000 &&
+             data.lastResetDate is string && data.lastResetDate.size() <= 10 &&
+             data.keys().hasAll(['credits', 'lastResetDate']);
+    }
+
+    function isValidToken(data) {
+      return data.rewardAmount is int && data.rewardAmount > 0 &&
+             data.maxUses is int && data.maxUses > 0 &&
+             data.usesCount is int && data.usesCount >= 0 &&
+             data.usedBy is list &&
+             data.keys().hasAll(['rewardAmount', 'maxUses', 'usesCount', 'usedBy']);
+    }
+
+    function isValidLog(data) {
+      return data.userId == request.auth.uid &&
+             data.tokenId is string &&
+             data.amount is int &&
+             data.createdAt == request.time &&
+             data.keys().hasAll(['userId', 'tokenId', 'amount', 'createdAt']) &&
+             data.keys().size() == 4;
+    }
+
+    // --- Collection Routes ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+    }
+
+    match /chats/{chatId} {
+      // Create: user must be the owner
+      allow create: if isSignedIn() && isValidChat(incoming());
+      
+      // Update: only allow updating title or updatedAt
+      allow update: if isSignedIn() && isOwner(existing().userId) && 
+                      incoming().userId == existing().userId &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().updatedAt == request.time &&
+                      (
+                        incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']) ||
+                        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'updatedAt'])
+                      );
+      
+      allow delete: if isSignedIn() && isOwner(existing().userId);
+      allow get: if isSignedIn() && isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      match /messages/{messageId} {
+        // Must own the parent chat to add messages
+        allow create: if isSignedIn() && 
+                        isValidId(chatId) &&
+                        get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid &&
+                        isValidMessage(incoming());
+        
+        // List/Get: ensure user owns the messages (or parent chat, which they do if messages match userId)
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // --- Reward System ---
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.email == "wesley04012011w@gmail.com" || request.auth.token.email == "darkquoteinsta@gmail.com");
+    }
+
+    match /reward_tokens/{tokenId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        isValidId(tokenId) &&
+        isValidToken(incoming()) &&
+        // Action: Claim
+        incoming().usesCount == existing().usesCount + 1 &&
+        incoming().usedBy.size() == existing().usedBy.size() + 1 &&
+        incoming().usedBy.hasAll(existing().usedBy) &&
+        incoming().usedBy.hasAny([request.auth.uid]) &&
+        incoming().rewardAmount == existing().rewardAmount &&
+        incoming().maxUses == existing().maxUses &&
+        incoming().usesCount <= existing().maxUses &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['usesCount', 'usedBy', 'lastClaimedAt']) ||
+          // Also allow if it had fewer fields before for some reason
+          incoming().diff(existing()).affectedKeys().hasAll(['usesCount', 'usedBy', 'lastClaimedAt'])
+        )
+      );
+    }
+
+    match /reward_logs/{logId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidLog(incoming());
+      allow update, delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "Chat": {
+      "title": "Chat Session",
+      "description": "Represents a conversation session between a user and the AI.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the chat session."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who owns this chat."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the chat was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the chat was last updated."
+        }
+      },
+      "required": ["title", "userId", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "A single message in a chat session.",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"],
+          "description": "The role of the message sender."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The owner of the chat."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the message was sent."
+        }
+      },
+      "required": ["role", "content", "userId", "createdAt"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user-specific data like credits.",
+      "type": "object",
+      "properties": {
+        "credits": {
+          "type": "integer",
+          "description": "Number of remaining credits for the day."
+        },
+        "lastResetDate": {
+          "type": "string",
+          "description": "The date when credits were last reset (YYYY-MM-DD)."
+        }
+      },
+      "required": ["credits", "lastResetDate"]
+    },
+    "RewardToken": {
+      "title": "Reward Token",
+      "description": "Temporary token for claiming rewards from shorteners.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "used": { "type": "boolean" },
+        "rewardAmount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "expiresAt", "used", "rewardAmount", "createdAt"]
+    },
+    "RewardLog": {
+      "title": "Reward Log",
+      "description": "Audit trail for every claimed reward.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "tokenId": { "type": "string" },
+        "amount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "tokenId", "amount", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile document for storing credits and metadata."
+    },
+    "chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Root collection for chat sessions."
+    },
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Subcollection containing messages for a specific chat."
+    },
+    "reward_tokens/{tokenId}": {
+      "schema": "RewardToken",
+      "description": "Secure collection for temporary reward tokens."
+    },
+    "reward_logs/{logId}": {
+      "schema": "RewardLog",
+      "description": "Public (read-only for user) logs of reward claims."
+    }
+  }
+}
