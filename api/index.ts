@@ -73,6 +73,18 @@ async function createToken(code: string | null, amount: number = 20, maxUses: nu
 const app = express();
 const PORT = 3000;
 
+// Handle CORS and preflight
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With");
+  
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json({ limit: "50mb" }));
 
 // Middleware to verify Firebase ID Token
@@ -114,7 +126,7 @@ app.post("/api/ai/chat", async (req, res) => {
         process.env.OPENROUTER_API_KEY_4,
         process.env.OPENROUTER_API_KEY_5,
         process.env.OPENROUTER_API_KEY,
-      ].filter(k => k && k.length > 5);
+      ].filter(k => k && k.length > 20 && !k.includes("YOUR_") && !k.startsWith("sk-or-your"));
 
       if (orKeys.length === 0) {
         return res.status(500).json({ 
@@ -180,12 +192,12 @@ app.post("/api/ai/chat", async (req, res) => {
         process.env.GEMINI_API_KEY_4,
         process.env.GEMINI_API_KEY_5,
         process.env.GEMINI_API_KEY,
-      ].filter(k => k && k.length > 5);
+      ].filter(k => k && k.length > 20 && !k.includes("YOUR_") && !k.startsWith("PLACEHOLDER"));
 
       if (geminiKeys.length === 0) {
         return res.status(500).json({ 
-          error: "GEMINI_API_KEY não configurada.",
-          details: "Certifique-se de preencher as chaves GEMINI_API_KEY_1 até 5 nas configurações do projeto." 
+          error: "GEMINI_API_KEY não configurada no servidor.",
+          details: "Para modelos Gemini, use a implementação direta via frontend (recomendado) ou configure chaves válidas no backend." 
         });
       }
 
@@ -243,7 +255,7 @@ app.post("/api/ai/chat", async (req, res) => {
         process.env.DEEPSEEK_API_KEY_4,
         process.env.DEEPSEEK_API_KEY_5,
         process.env.DEEPSEEK_API_KEY,
-      ].filter(k => k && k.length > 5);
+      ].filter(k => k && k.length > 20 && !k.includes("YOUR_") && !k.startsWith("sk-placeholder"));
 
       if (keys.length === 0) {
         return res.status(500).json({ 
